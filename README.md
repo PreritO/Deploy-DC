@@ -3,15 +3,28 @@
 This readme is meant to provide insight into setting up and running the media-microservices [DeathStarBench](https://github.com/delimitrou/DeathStarBench/tree/master/mediaMicroservices) on a Cloudlab instance with 3 nodes (1 master, 2 worker nodes)
 
 ## Setup Steps:
-1. Install Docker and Kubernetes
+1. Install Docker and Kubernetes and Go
 2. Instantiate a K8s cluster
 3. Install python3-pip, asyncio, and aiohttp
+4. Install k8s client go libraries:
+    ```
+        go get k8s.io/api
+        go get k8s.io/apimachinery
+        go get k8s.io/client-go
+    ```
 
-## Deploy Application
+## Deploy Application without Go Script
 1. Change lines 55, 59, 63, and 67 in `<path-to-repo>/DeathStarBench/mediaMicroservices/k8s-yaml/nginx-web-server.yaml` which refers to the the installation directory location of DeathStarBench to the appropriate location
 2. On Master note, create namespace `media-microsvc` via: `kubectl create namespace media-microsvc`
 3. Deploy all pods via: `kubectl apply -f <path-of-repo>/mediaMicroservices/k8s-yaml/`
 4. Wait until `kubectl -n media-microsvc get pod` displays all Pods as running
+
+## Deploy Application with Go Script
+1. Change lines 55, 59, 63, and 67 in `<path-to-repo>/DeathStarBench/mediaMicroservices/k8s-yaml/nginx-web-server.yaml` which refers to the the installation directory location of DeathStarBench to the appropriate location
+2. On Master note, create namespace `media-microsvc` via: `kubectl create namespace media-microsvc`
+3.
+4. Wait until `kubectl -n media-microsvc get pod` displays all Pods as running
+
 
 ## Register users and movie information
 1. Use `kubectl -n media-microsvc get svc nginx-web-server` to get its cluster-ip.
