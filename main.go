@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	//corev1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	//"k8s.io/apimachinery/pkg/api/resource"
 	//"reflect"
@@ -56,7 +56,6 @@ func deployer(deploymentPath string, namespace string, clientset *kubernetes.Cli
 	//acceptedK8sTypes := regexp.MustCompile(`(Deployment)`)
 	podNames := []string{}
 	// Todo:  get the namespace of the application here
-	deploymentsClient := clientset.AppsV1().Deployments(namespace)
 
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	for _, item := range files {
@@ -87,26 +86,35 @@ func deployer(deploymentPath string, namespace string, clientset *kubernetes.Cli
 			switch groupVersionKind.Kind {
 			case "Deployment":
 				fmt.Printf("Found Deployment! \n")
-				// Here, we can parse through the deployment object
+				deploymentsClient := clientset.AppsV1().Deployments(namespace)
 				originalDeployment := obj.(*appsv1.Deployment)
 				for i := 0; i < len(originalDeployment.Spec.Template.Spec.Containers); i++ {
 					fmt.Printf("Container Name: %s\n", originalDeployment.Spec.Template.Spec.Containers[i].Name)
 					podNames = append(podNames, originalDeployment.Spec.Template.Spec.Containers[i].Name)
 
 					// Todo:  Update limits here of each individual container here to be total limit/total containers...
+					// resource: https://github.com/kubernetes/kubernetes/blob/master/pkg/controller/resourcequota/resource_quota_controller_test.go
 					// originalDeployment.Spec.Template.Spec.Containers[i].Resources.Limits[corev1.ResourceCPU] = resource.MustParse("100m")
 					// originalDeployment.Spec.Template.Spec.Containers[i].Resources.Limits[corev1.ResourceMemory] = resource.MustParse("1Gi")
 					// fmt.Printf("Type: %++v\n", reflect.TypeOf(originalDeployment))
 					// fmt.Printf("Container Limits: %s\n", originalDeployment.Spec.Template.Spec.Containers[i].Resources.Limits[corev1.ResourceCPU])
 				}
-				fmt.Println("Creating deployment...")
+				// example resource: https://github.com/kubernetes/client-go/blob/master/examples/create-update-delete-deployment/main.go
+				// API: https://godoc.org/k8s.io/api/apps/v1
 				result, err := deploymentsClient.Create(context.TODO(), originalDeployment, metav1.CreateOptions{})
 				if err != nil {
 					panic(err)
 				}
 				fmt.Printf("Created deployment %q.\n", result.GetObjectMeta().GetName())
 			case "Service":
-				
+				fmt.Printf("Found Service! \n")
+				servicesClientInterface := clientset.CoreV1().Services(namespace)
+				originalService := obj.(*corev1.Service)
+				result, err := servicesClientInterface.Create(context.TODO(), originalService, metav1.CreateOptions{})
+				if err != nil {
+					panic(err)
+				}
+				fmt.Printf("Created Service %q.\n", result.GetObjectMeta().GetName())
 			default:
 				fmt.Printf("Unsupported Type: %s \n", groupVersionKind.Kind)
 				continue
@@ -161,6 +169,6 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error in parsing through deployment")
 	}
-	fmt.Printf("All Pod Names: %s\n", podList)
+	fmt.Printf("Application Pod Names: %s\n", podList)
 
 }

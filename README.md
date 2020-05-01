@@ -22,7 +22,8 @@ This readme is meant to provide insight into setting up and running the media-mi
 ## Deploy Application with Go Script
 1. Change lines 55, 59, 63, and 67 in `<path-to-repo>/DeathStarBench/mediaMicroservices/k8s-yaml/nginx-web-server.yaml` which refers to the the installation directory location of DeathStarBench to the appropriate location
 2. On Master note, create namespace `media-microsvc` via: `kubectl create namespace media-microsvc`
-3.
+3. Deploy all pods via: `go run main.go -f <path-to-app-def-json>`
+    - assure that the app-def JSON file has the correct filepath to the deployment application
 4. Wait until `kubectl -n media-microsvc get pod` displays all Pods as running
 
 
