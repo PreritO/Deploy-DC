@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"context"
 
 	// Attempt 1
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,7 +17,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 	//corev1 "k8s.io/api/core/v1"
-	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	//"k8s.io/apimachinery/pkg/api/resource"
 	//"reflect"
 )
@@ -42,38 +43,11 @@ func configK8() *kubernetes.Clientset {
 	return clientset
 }
 
-func deployer(filePath *string) ([]string, int) {
-	jsonAppDefFile, err := os.Open(*filePath)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("[DBG] Successfully opened %s\n", *filePath)
-	defer jsonAppDefFile.Close()
-
-	jsonByteValue, _ := ioutil.ReadAll(jsonAppDefFile)
-	var result map[string]interface{}
-	json.Unmarshal([]byte(jsonByteValue), &result)
-
-	appName := result["name"]
-	agentIPs := result["agentIPs"]
-	gcmIP := result["gcmIP"]
-	deploymentPath := result["deploymentPath"]
-
-	if deploymentPath == nil {
-		fmt.Printf("[ERROR] Application Deployment path is null: \n")
-		os.Exit(1)
-	}
-
-	fmt.Printf("AppName: %s, agent IP: %s, gcmIP: %s, deploymentPath: %s \n", appName, agentIPs, gcmIP, deploymentPath)
-
-	//clientset := configK8()
-
+func deployer(deploymentPath string, namespace string, clientset *kubernetes.Clientset) ([]string, error) {
 	// Now, we need to extract all pod names from the files in the deployment path so that we can keep track of them
 
 	fmt.Printf("Reading Directory: %s\n", deploymentPath)
-	files, err := ioutil.ReadDir(deploymentPath.(string))
+	files, err := ioutil.ReadDir(deploymentPath)
 	if err != nil {
 		fmt.Printf("[ERROR] Can't read files from deployment path directory: %s\n", deploymentPath)
 		fmt.Println(err)
@@ -81,6 +55,8 @@ func deployer(filePath *string) ([]string, int) {
 	}
 	//acceptedK8sTypes := regexp.MustCompile(`(Deployment)`)
 	podNames := []string{}
+	// Todo:  get the namespace of the application here
+	deploymentsClient := clientset.AppsV1().Deployments(namespace)
 
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	for _, item := range files {
@@ -107,7 +83,7 @@ func deployer(filePath *string) ([]string, int) {
 				fmt.Println(fmt.Sprintf("Error while decoding YAML object. Err was: %s", err))
 				continue
 			}
-
+			
 			switch groupVersionKind.Kind {
 			case "Deployment":
 				fmt.Printf("Found Deployment! \n")
@@ -117,12 +93,19 @@ func deployer(filePath *string) ([]string, int) {
 					fmt.Printf("Container Name: %s\n", originalDeployment.Spec.Template.Spec.Containers[i].Name)
 					podNames = append(podNames, originalDeployment.Spec.Template.Spec.Containers[i].Name)
 
-					// Todo:  Update limits here and then deploy the deployment
+					// Todo:  Update limits here of each individual container here to be total limit/total containers...
 					// originalDeployment.Spec.Template.Spec.Containers[i].Resources.Limits[corev1.ResourceCPU] = resource.MustParse("100m")
 					// originalDeployment.Spec.Template.Spec.Containers[i].Resources.Limits[corev1.ResourceMemory] = resource.MustParse("1Gi")
 					// fmt.Printf("Type: %++v\n", reflect.TypeOf(originalDeployment))
 					// fmt.Printf("Container Limits: %s\n", originalDeployment.Spec.Template.Spec.Containers[i].Resources.Limits[corev1.ResourceCPU])
 				}
+				fmt.Println("Creating deployment...")
+				result, err := deploymentsClient.Create(context.TODO(), originalDeployment, metav1.CreateOptions{})
+				if err != nil {
+					panic(err)
+				}
+				fmt.Printf("Created deployment %q.\n", result.GetObjectMeta().GetName())
+			case "Service":
 				
 			default:
 				fmt.Printf("Unsupported Type: %s \n", groupVersionKind.Kind)
@@ -131,7 +114,7 @@ func deployer(filePath *string) ([]string, int) {
 		}
 		fmt.Printf("\n")
 	}
-	return podNames, 0
+	return podNames, nil
 }
 
 func main() {
@@ -145,8 +128,37 @@ func main() {
 		os.Exit(1)
 	}
 
-	podList, err := deployer(appDefFilePtr)
-	if err != 0 {
+	jsonAppDefFile, err := os.Open(*appDefFilePtr)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("[DBG] Successfully opened %s\n", *appDefFilePtr)
+	defer jsonAppDefFile.Close()
+
+	jsonByteValue, _ := ioutil.ReadAll(jsonAppDefFile)
+	var result map[string]interface{}
+	json.Unmarshal([]byte(jsonByteValue), &result)
+
+	appName := result["name"]
+	agentIPs := result["agentIPs"]
+	gcmIP := result["gcmIP"]
+	deploymentPath := result["deploymentPath"]
+
+	if deploymentPath == nil {
+		fmt.Printf("[ERROR] Application Deployment path is null: \n")
+		os.Exit(1)
+	}
+
+	fmt.Printf("AppName: %s, agent IP: %s, gcmIP: %s, deploymentPath: %s \n", appName, agentIPs, gcmIP, deploymentPath)
+
+	fmt.Printf("[DBG] Configuring K8s ClientSet\n")
+	clientset := configK8()
+
+	fmt.Printf("[DBG] Deploying Application and Gathering List of Active Pods.. \n")
+	podList, err := deployer(deploymentPath.(string), "media-microsvc" ,clientset)
+	if err != nil {
 		fmt.Printf("Error in parsing through deployment")
 	}
 	fmt.Printf("All Pod Names: %s\n", podList)
