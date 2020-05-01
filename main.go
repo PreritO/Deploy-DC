@@ -153,6 +153,7 @@ func main() {
 	agentIPs := result["agentIPs"]
 	gcmIP := result["gcmIP"]
 	deploymentPath := result["deploymentPath"]
+	namespace := result["namespace"]
 
 	if deploymentPath == nil {
 		fmt.Printf("[ERROR] Application Deployment spath is null: \n")
@@ -167,11 +168,13 @@ func main() {
 
 	// Deploy the Application nominally - as it would be via `kubectl apply -f` and get the container names of all pods in the application
 	fmt.Printf("[DBG] Deploying Application and Gathering List of Active Pods.. \n")
-	podList, err := deployer(deploymentPath.(string), "media-microsvc" ,clientset)
+	podList, err := deployer(deploymentPath.(string), namespace.(string) ,clientset)
 	if err != nil {
 		fmt.Printf("Error in parsing through deployment")
 	}
 	fmt.Printf("Deployed Application Pod Names: %s\n", podList)
-	
+
+	// Finally, create a controller which monitors the application for added/deleted pods
+
 
 }

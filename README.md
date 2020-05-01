@@ -2,6 +2,8 @@
 
 This readme is meant to provide insight into setting up and running the media-microservices [DeathStarBench](https://github.com/delimitrou/DeathStarBench/tree/master/mediaMicroservices) on a Cloudlab instance with 3 nodes (1 master, 2 worker nodes)
 
+It has also been tested with the [social-network](https://github.com/delimitrou/DeathStarBench/tree/master/socialNetwork/k8s-yaml) micrroservices application. The only change is in the namespace that you have to create (i.e. create namespace `social-network`)
+
 ## Setup Steps:
 1. Install Docker and Kubernetes and Go
 2. Instantiate a K8s cluster

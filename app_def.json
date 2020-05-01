@@ -11,5 +11,6 @@
         "128.105.144.160",
         "128.105.144.143"
 	],
-	"deploymentPath" : "/mnt/ECKernel/DeathStarBench/mediaMicroservices/k8s-yaml/"
+	"deploymentPath" : "/mnt/ECKernel/DeathStarBench/socialNetwork/k8s-yaml/",
+	"namespace": "social-network"
 }
