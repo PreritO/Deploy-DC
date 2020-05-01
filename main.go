@@ -126,7 +126,7 @@ func deployer(deploymentPath string, namespace string, clientset *kubernetes.Cli
 }
 
 func main() {
-	// Replaces main.cpp in that it parses the fields from the passed in JSON app_definition file:
+	// First, we parse the application definition file for app statisitics
 	appDefFilePtr := flag.String("f", "", "App Definition File to parse. (Required)")
 	flag.Parse()
 
@@ -155,20 +155,23 @@ func main() {
 	deploymentPath := result["deploymentPath"]
 
 	if deploymentPath == nil {
-		fmt.Printf("[ERROR] Application Deployment path is null: \n")
+		fmt.Printf("[ERROR] Application Deployment spath is null: \n")
 		os.Exit(1)
 	}
 
 	fmt.Printf("AppName: %s, agent IP: %s, gcmIP: %s, deploymentPath: %s \n", appName, agentIPs, gcmIP, deploymentPath)
 
+	// Now, we configure the K8s ClientSet and get a reference to that
 	fmt.Printf("[DBG] Configuring K8s ClientSet\n")
 	clientset := configK8()
 
+	// Deploy the Application nominally - as it would be via `kubectl apply -f` and get the container names of all pods in the application
 	fmt.Printf("[DBG] Deploying Application and Gathering List of Active Pods.. \n")
 	podList, err := deployer(deploymentPath.(string), "media-microsvc" ,clientset)
 	if err != nil {
 		fmt.Printf("Error in parsing through deployment")
 	}
-	fmt.Printf("Application Pod Names: %s\n", podList)
+	fmt.Printf("Deployed Application Pod Names: %s\n", podList)
+	
 
 }
