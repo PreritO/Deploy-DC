@@ -1,4 +1,9 @@
-// Resource: https://itnext.io/how-to-create-a-kubernetes-custom-controller-using-client-go-f36a7a7536cc
+/* Resources: 1. https://itnext.io/how-to-create-a-kubernetes-custom-controller-using-client-go-f36a7a7536cc
+			  2. https://medium.com/@cloudark/kubernetes-custom-controllers-b6c7d0668fdf
+			  3. https://github.com/kubernetes/sample-controller/blob/master/docs/controller-client-go.md
+			  4. https://engineering.bitnami.com/articles/a-deep-dive-into-kubernetes-controllers.html
+			  5. https://github.com/kubernetes/client-go/blob/master/examples/workqueue/main.go
+*/
 package podWatcher
 
 import (
@@ -54,7 +59,7 @@ func (c *Controller) processNextItem() bool {
 // information about the pod to stdout. In case an error happened, it has to simply return the error.
 // The retry logic should not be part of the business logic.
 func (c *Controller) syncToStdout(key string) error {
-	obj, exists, err := c.indexer.GetByKey(key)
+	_, exists, err := c.indexer.GetByKey(key)
 	if err != nil {
 		klog.Errorf("Fetching object with key %s from store failed with %v", key, err)
 		return err
@@ -62,12 +67,14 @@ func (c *Controller) syncToStdout(key string) error {
 
 	if !exists {
 		// Below we will warm up our cache with a Pod, so that we will see a delete for one pod
-		fmt.Printf("Pod %s does not exist anymore\n", key)
-	} else {
-		// Note that you also have to check the uid if you have a local controlled resource, which
-		// is dependent on the actual instance, to detect that a Pod was recreated with the same name
-		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*corev1.Pod).GetName())
-	}
+		fmt.Printf("Pod with key: %s does not exist anymore\n", key)
+
+	} 
+	// else {
+	// 	// Note that you also have to check the uid if you have a local controlled resource, which
+	// 	// is dependent on the actual instance, to detect that a Pod was recreated with the same name
+	// 	fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*corev1.Pod).GetName())
+	// }
 	return nil
 }
 
@@ -145,6 +152,8 @@ func SetupWatcher(podListWatcher *cache.ListWatch, queue workqueue.RateLimitingI
 			if err == nil {
 				queue.Add(key)
 			}
+			fmt.Printf("Add for Pod %s\n", obj.(*corev1.Pod).GetName())
+			// This is where we'd want the GRPC call for calling sysconnect on new pods would be (I think.. because it would handle pods being created and spun)
 		},
 		UpdateFunc: func(old interface{}, new interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(new)
@@ -155,6 +164,8 @@ func SetupWatcher(podListWatcher *cache.ListWatch, queue workqueue.RateLimitingI
 		DeleteFunc: func(obj interface{}) {
 			// IndexerInformer uses a delta queue, therefore for deletes we have to use this
 			// key function.
+			fmt.Printf("Delete for Pod %s\n", obj.(*corev1.Pod).GetName())
+			// This is where we'd want the GRPC call for calling disconnecting container from the GCM on deleted pods would be (i.e. if and when a pod gets killed, we can identify it here)
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			if err == nil {
 				queue.Add(key)

@@ -70,7 +70,7 @@ func deployer(deploymentPath string, namespace string, clientset *kubernetes.Cli
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	for _, item := range files {
 		filePath := fmt.Sprintf("%v", deploymentPath) + item.Name()
-		fmt.Println("Reading File: %s", filePath)
+		fmt.Printf("Reading File: %s\n", filePath)
 
 		// Attempt 1
 		yamlFile, err := ioutil.ReadFile(filePath)
@@ -185,7 +185,7 @@ func main() {
 
 	controller := podWatcher.SetupWatcher(podListWatcher, queue)
 
-	// Now let's start the controller
+	// Now let's start the controller on a seperate thread
 	stop := make(chan struct{})
 	defer close(stop)
 	go controller.Run(1, stop)
