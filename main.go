@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	// Custom module
-	"podWatcher"
+	"github.com/PreritO/Deploy-DC/podWatcher"
 )
 
 func configK8() *kubernetes.Clientset {
