@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	// Controller
 	"k8s.io/klog"
-
-	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+
 )
 
 type Controller struct {
@@ -119,3 +120,46 @@ func (c *Controller) runWorker() {
 	for c.processNextItem() {
 	}
 }
+
+func listWatcher(namespace string) *cache.ListWatch {
+	return cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "pods", namespace.(string), fields.Everything())
+}
+
+func createQueue() workqueue.RateLimitingInterface {
+	return workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+}
+
+
+func setupWatcher(podListWatcher *cache.ListWatch, queue workqueue.RateLimitingInterface) *Controller {
+	// Bind the workqueue to a cache with the help of an informer. This way we make sure that
+	// whenever the cache is updated, the pod key is added to the workqueue.
+	// Note that when we finally process the item from the workqueue, we might see a newer version
+	// of the Pod than the version which was responsible for triggering the update.
+	indexer, informer := cache.NewIndexerInformer(podListWatcher, &corev1.Pod{}, 0, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+		UpdateFunc: func(old interface{}, new interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			// IndexerInformer uses a delta queue, therefore for deletes we have to use this
+			// key function.
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+	}, cache.Indexers{})
+
+	controller := NewController(queue, indexer, informer)
+
+	return controller
+}
+
