@@ -18,8 +18,12 @@ import (
 	"k8s.io/client-go/util/homedir"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	//"k8s.io/apimachinery/pkg/api/resource"
-	//"reflect"
+
+	"k8s.io/client-go/util/workqueue"
+	"k8s.io/client-go/tools/cache"
+
+	// Custom module
+	"podWatcher"
 )
 
 func configK8() *kubernetes.Clientset {
@@ -125,6 +129,50 @@ func deployer(deploymentPath string, namespace string, clientset *kubernetes.Cli
 	return podNames, nil
 }
 
+func setupWatcher(podListWatcher *listWatch, queue RateLimitingInterface) *Controller {
+	// Bind the workqueue to a cache with the help of an informer. This way we make sure that
+	// whenever the cache is updated, the pod key is added to the workqueue.
+	// Note that when we finally process the item from the workqueue, we might see a newer version
+	// of the Pod than the version which was responsible for triggering the update.
+	indexer, informer := cache.NewIndexerInformer(podListWatcher, &v1.Pod{}, 0, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+		UpdateFunc: func(old interface{}, new interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			// IndexerInformer uses a delta queue, therefore for deletes we have to use this
+			// key function.
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+	}, cache.Indexers{})
+
+	controller := NewController(queue, indexer, informer)
+
+	// // We can now warm up the cache for initial synchronization.
+	// // Let's suppose that we knew about a pod "mypod" on our last run, therefore add it to the cache.
+	// // If this pod is not there anymore, the controller will be notified about the removal after the
+	// // cache has synchronized.
+	// indexer.Add(&v1.Pod{
+	// 	ObjectMeta: meta_v1.ObjectMeta{
+	// 		Name:      "mypod",
+	// 		Namespace: v1.NamespaceDefault,
+	// 	},
+	// })
+
+	return controller
+}
+
 func main() {
 	// First, we parse the application definition file for app statisitics
 	appDefFilePtr := flag.String("f", "", "App Definition File to parse. (Required)")
@@ -166,6 +214,17 @@ func main() {
 	fmt.Printf("[DBG] Configuring K8s ClientSet\n")
 	clientset := configK8()
 
+	// Add a Pod watcher/listener here for pods added to the appropriate namespace
+	podListWatcher := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "pods", namespace.(string) , fields.Everything())
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+
+	controller := setupWatcher(podListWatcher, queue)
+
+	// Now let's start the controller
+	stop := make(chan struct{})
+	defer close(stop)
+	go controller.Run(1, stop)
+
 	// Deploy the Application nominally - as it would be via `kubectl apply -f` and get the container names of all pods in the application
 	fmt.Printf("[DBG] Deploying Application and Gathering List of Active Pods.. \n")
 	podList, err := deployer(deploymentPath.(string), namespace.(string) ,clientset)
@@ -173,8 +232,6 @@ func main() {
 		fmt.Printf("Error in parsing through deployment")
 	}
 	fmt.Printf("Deployed Application Pod Names: %s\n", podList)
-
-	// Finally, create a controller which monitors the application for added/deleted pods
 
 
 }
