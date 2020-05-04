@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
+
+
 	// Controller
 	"k8s.io/klog"
 	"k8s.io/apimachinery/pkg/fields"
@@ -62,7 +66,7 @@ func (c *Controller) syncToStdout(key string) error {
 	} else {
 		// Note that you also have to check the uid if you have a local controlled resource, which
 		// is dependent on the actual instance, to detect that a Pod was recreated with the same name
-		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*v1.Pod).GetName())
+		fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*corev1.Pod).GetName())
 	}
 	return nil
 }
@@ -121,16 +125,16 @@ func (c *Controller) runWorker() {
 	}
 }
 
-func listWatcher(namespace string) *cache.ListWatch {
-	return cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "pods", namespace.(string), fields.Everything())
+func ListWatcher(namespace string, clientset *kubernetes.Clientset) *cache.ListWatch {
+	return cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "pods", namespace, fields.Everything())
 }
 
-func createQueue() workqueue.RateLimitingInterface {
+func CreateQueue() workqueue.RateLimitingInterface {
 	return workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 }
 
 
-func setupWatcher(podListWatcher *cache.ListWatch, queue workqueue.RateLimitingInterface) *Controller {
+func SetupWatcher(podListWatcher *cache.ListWatch, queue workqueue.RateLimitingInterface) *Controller {
 	// Bind the workqueue to a cache with the help of an informer. This way we make sure that
 	// whenever the cache is updated, the pod key is added to the workqueue.
 	// Note that when we finally process the item from the workqueue, we might see a newer version
